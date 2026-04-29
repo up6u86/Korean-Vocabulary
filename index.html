@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>韓語單字學習 App</title>
+  
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          animation: {
+            'fade-in': 'fadeIn 0.3s ease-out',
+            'slide-up': 'slideUp 0.4s ease-out',
+            'shake': 'shake 0.5s ease-in-out',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0' },
+              '100%': { opacity: '1' },
+            },
+            slideUp: {
+              '0%': { opacity: '0', transform: 'translateY(10px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            shake: {
+              '0%, 100%': { transform: 'translateX(0)' },
+              '25%': { transform: 'translateX(-5px)' },
+              '50%': { transform: 'translateX(5px)' },
+              '75%': { transform: 'translateX(-5px)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* 處理 iPhone 底部安全距離 */
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    /* 防止點擊時出現藍色高光 */
+    * { -webkit-tap-highlight-color: transparent; }
+  </style>
+
+  <!-- 引入 React 與 ReactDOM (使用 v18) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- 引入 Babel 讓瀏覽器可以編譯 JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React 應用程式代碼 -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // ==========================================
+    // 1. 內聯 SVG 圖標組件 (取代會報錯的 lucide-react CDN)
+    // ==========================================
+    const Icon = ({ children, size = 24, strokeWidth = 2, fill = "none", className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
+        {children}
+      </svg>
+    );
+
+    const Home = (props) => <Icon {...props}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></Icon>;
+    const BookOpen = (props) => <Icon {...props}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></Icon>;
+    const Swords = (props) => <Icon {...props}><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" x2="19" y1="19" y2="13"/><line x1="16" x2="20" y1="16" y2="20"/><line x1="19" x2="21" y1="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" x2="9" y1="14" y2="18"/><line x1="7" x2="4" y1="17" y2="20"/><line x1="3" x2="5" y1="19" y2="21"/></Icon>;
+    const ArrowRight = (props) => <Icon {...props}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></Icon>;
+    const Check = (props) => <Icon {...props}><polyline points="20 6 9 17 4 12"/></Icon>;
+    const Play = (props) => <Icon {...props}><polygon points="5 3 19 12 5 21" /></Icon>;
+    const RefreshCw = (props) => <Icon {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><polyline points="3 3 3 8 8 8"/></Icon>;
+    const Flame = (props) => <Icon {...props}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></Icon>;
+    const ChevronDown = (props) => <Icon {...props}><polyline points="6 9 12 15 18 9"/></Icon>;
+    const ChevronUp = (props) => <Icon {...props}><polyline points="18 15 12 9 6 15"/></Icon>;
+    const ImageIcon = (props) => <Icon {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></Icon>;
+
+    // ==========================================
+    // 2. 資料庫與常數設定
+    // ==========================================
+    const vocabData = [
+      {"ID":"016-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"맏이","漢字源（Hanja）":"","詞性":"名","中文意義":"老大","韓文例句":"이래 봬도 7형제(의) 맏이.","例句中文":"就算看起來這樣，他畢竟是七個孩子裡最大的。","目標中文":"最大的","延伸單字":"형제 (兄弟) / 자매 (姊妹) / 남매 (男妹：兄弟姊妹)","詳細解說":"最年長的。從兄弟姊妹的角度來看的「大哥」稱為맏이，從父母的角度來看則稱為맏아들。「大姊」稱為맏언니或맏딸，「大兒媳婦」稱為맏며느리。如果你有兩個哥哥，就是큰형（大的哥哥）和작은형（小的哥哥）。如果有三個人，也可以分別稱為첫째형（大哥）、둘째형（二哥）、셋째형（三哥）。這些兄弟姊妹的名字不僅用於親兄弟姊妹之間，也用於偶像團體內部。"},
+      {"ID":"017-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"막내","漢字源（Hanja）":"","詞性":"名","中文意義":"老么*","韓文例句":"잘했어, 우리 막내.","例句中文":"做得好呀，我們家的忙內。","目標中文":"忙內","延伸單字":"막둥이 (老么（暱稱）) / 늦둥이 (晚年得子的子) / 막내 직원 (最年輕的員工) / 막내 작가 (最年輕的作家)","詳細解說":"「最小的兒子」是「막내아들」，「最小的女兒」是「막내딸」。稱呼年紀較大的人會根據性別使用不同的名稱，稱呼年紀較小的人則不太會在意性別。儘管不同性別也有特定的稱呼，例如「남동생（弟弟）」和「여동생（妹妹）」，「조카（姪子／外甥）」和「조카딸（姪女／外甥女）」，以及「손자（孫子）」和「손녀딸（孫女）」，但經常會簡單稱呼為「우리 동생（我家小弟／小妹）」，或是「우리 조카（我家外甥／姪兒）」。這些表達方式無法直接翻譯，因為中文中只有特定性別的名稱。「막내也用於公司等組織中最年輕的人或下屬。"},
+      {"ID":"018-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"친구","漢字源（Hanja）":"親舊","詞性":"名","中文意義":"朋友，好友*","韓文例句":"나랑 친구 하고 싶다고요?","例句中文":"你想和我當朋友嗎？","目標中文":"朋友","延伸單字":"고향 친구 (同鄉朋友) / 소꿉친구 (青梅竹馬) / 중학교 동창 (中學同學)","詳細解說":"不只朋友，同年齡（同輩）的人有時也可以稱為「친구」。當一位前輩對後輩說「내가 니 친구냐?」（我不是你的朋友＝我跟你不是同齡吧？）時，就是斥責後輩豈能把長輩當成同輩的意思。由於친구是與年齡相關的詞，所以不同年齡的朋友被稱為「친한 언니（親近的前輩）」和「친한 동생（親近的後輩）」。這個詞也可用來友善稱呼小於同輩的人，例如「저 친구는（那個傢伙啊）」、「착한 친구야（他是個好孩子）」。"},
+      {"ID":"019-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"또래","漢字源（Hanja）":"","詞性":"名","中文意義":"同輩","韓文例句":"같은 또래끼리 친하게 지내요.","例句中文":"我們是同一代的同輩，好好相處吧。","目標中文":"同一代的同輩","延伸單字":"동갑 (同甲：同年) / 띠동갑 (同生肖、相差一輪)","詳細解說":"「同齡人，同代人」是「또래」。要說「我們這一代」時，就可以說「우리 (저희) 나이 또래」。「저희 나이 또래는 흔히 MZ 세대라고 하죠.」（我們這一代通常被稱為MZ世代（80年代到2000年代末期出生的人）。「同一代的男孩」是「또래 남자들」，「同一代的女孩」是「또래 여자들」。「또래 여자들은 다 케이 팝 팬이에요.」（我這一代的所有女生都是韓流粉絲。）"},
+      {"ID":"020-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"아저씨","漢字源（Hanja）":"","詞性":"名","中文意義":"大叔","韓文例句":"저 아저씨 아니거든요.","例句中文":"雖然我才不是什麼大叔。","目標中文":"大叔","延伸單字":"할아버지 (爺爺) / 할머니 (奶奶)","詳細解說":"由於許多情況下無法使用第二人稱代名詞「너」（你：上對下、親近的人）和「당신」（你：尊稱），因此通常使用親屬稱謂代替第二人稱。以成年男性來說，未婚男性被稱為「총각（總角）」，已婚男性被稱為「아저씨」。然而，年輕人不太使用「총각」一詞，所以即使是大學生有時也被稱為「아저씨」。對於老年男性，則使用尊稱「他人的父母」的「어르신」（어른（大人）的敬稱）。"},
+      {"ID":"021-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"학생","漢字源（Hanja）":"學生","詞性":"名","中文意義":"同學","韓文例句":"거기 학생 잠깐 서 봐.","例句中文":"那邊的同學，請稍等一下。","目標中文":"同學","延伸單字":"《俗》꼬맹이 (小傢伙)","詳細解說":"雖然我們一般不會用「同學」當作稱謂，但也可以在要叫住某人的時候使用「학생」。這是一個針對年輕人，特別是國中生和高中生使用的稱呼。也可以用來稱呼學生為「某某同學」。「김남준 학생, 다음 문제 풀어 보세요.」（金南俊同學，請解開以下問題。）對年齡低於小學生的孩子說「你幾歲呀？」、「你在吃什麼呀？」的「你」，則會用「꼬마」（小朋友）表示。"},
+      {"ID":"022-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"삼촌","漢字源（Hanja）":"三寸","詞性":"名","中文意義":"叔叔","韓文例句":"줘봐, 삼촌이 해 줄게.","例句中文":"給我吧，叔叔幫你開。","目標中文":"叔叔","延伸單字":"외삼촌 (外三寸：舅舅) / 사촌 (四寸：堂表親=堂／表兄弟姊妹)","詳細解說":"未婚的叔叔稱為「삼촌（三寸）」。「三寸」的意思是「三等親」。在首爾方言中，它的發音為「삼춘」，所以你可能會常在電視劇和電影中聽到這樣的發音。如果叔叔結婚了，「父親的哥哥」的稱呼就會變成「큰아버지」，「父親的弟弟」的稱呼就会變成「작은아버지」。父方的親屬名稱往往分得比母方更細。"},
+      {"ID":"023-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"이모","漢字源（Hanja）":"姨母","詞性":"名","中文意義":"阿姨","韓文例句":"우리는 이모팬.","例句中文":"我們是一群姨母粉。","目標中文":"姨母","延伸單字":"사모님 (師母-：太太（意識到其丈夫職業的敬稱）) / 여사님 (女史-：女士，夫人（意識到該女性職業的敬稱）)","詳細解說":"嫗媪稱為「고모」，阿姨稱為「이모」。與父方親屬稱謂相比，母方的稱謂更有親切感，也更容易使用。正如我們會用兄弟姊妹來指稱他人，「삼촌」和「이모」有時也用來稱呼父母的朋友，或是年紀等同父母輩的親近人士。和偶像的年齡差距如同親子的粉絲可稱為「삼촌팬（叔叔粉）」和이모팬（姨母粉）」。「이모」也常以第二人稱詞出現，指稱餐廳裡的中年女員工。「아줌마」也是「阿姨」的意思，但正逐漸被更具表現力的詞彙取代。"},
+      {"ID":"024-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"부모님","漢字源（Hanja）":"父母","詞性":"名","中文意義":"父母親","韓文例句":"부모님 사랑해요.","例句中文":"我最愛爸爸媽媽了。","目標中文":"爸爸媽媽","延伸單字":"학부모 (學父母：家長)","詳細解說":"父母是「부모（父母）」。雖然還有個固有名詞「어버이」，但除了「어버이날」（韓國每年5月8日的父母節）之外很少使用。即使在談論自己的父母時，韓國人也會使用諸如「부모님이 주셨어요（我的父母親給我的）」之類的敬語。在成年後，對父母的第二人稱通常會改口為「어머니（母親）」和「아버지（父親）」，但近年來也有不少人繼續稱呼「엄마（媽媽）」和「아빠（爸爸）」。但如果是別人的父母或姻親，則還是要稱「어머니」或「어머님」，「아버지」或「아버님」。"},
+      {"ID":"025-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"선생님","漢字源（Hanja）":"先生","詞性":"名","中文意義":"先生，老師","韓文例句":"선생님 경찰서로 가시죠.","例句中文":"先生，要麻煩您跟我們去警局一趟。","目標中文":"先生","延伸單字":"사장님 (社長：社長、總經理（對於年長男性的敬稱）)","詳細解說":"年輕一代有時會省略「선생님」，將親近的老師稱為「쌤」。然而，無論你和老師有多親近，都還是要對他們使用敬語。當與陌生人打交道時，或是在政府機關窗口、當警察與公民打交道時，因為沒有合適的第二人稱，也會使用「선생님」。在電視劇《魷魚遊戲》中，西裝男（孔劉飾）初次向主角成奇勳（李政宰飾）搭話時，也是使用「선생님」。年齡差距相當於父母的前輩不稱為「선배님（先輩）」，而是稱為「선생님」。稱呼中老年人也可以用「아버님（伯父）」和「어머님（伯母）」。"},
+      {"ID":"026-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"언니","漢字源（Hanja）":"","詞性":"名","中文意義":"姊姊*","韓文例句":"내가 직장 왕언니(가) 됐다...","例句中文":"我變成職場上的老大姊了（女性中最年長者）。","目標中文":"老大姊","延伸單字":"-","詳細解說":"女性用來稱呼姊姊或親密女性長輩的稱謂。女性的關係往往比較平等，和男性稱「형」（哥）相比，「언니」更容易稱呼。不過，還請考慮一下年齡差異。如果年齡差距如同姊妹的話就可以稱為「언니」，如果差距等同父母的話則稱為「이모」。關係親密的女性有時也會稱對方為「자기（自己：親愛的）」。「자기 점심은 밖에서 먹을 거야?」（親愛的，要去外面吃午餐嗎？）「자기」也用於夫妻和情侶之間。"},
+      {"ID":"027-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"형님","漢字源（Hanja）":"兄-","詞性":"名","中文意義":"大姊","韓文例句":"형님이 계셔서 너무 든든해요.","例句中文":"有大姊在這裡，讓我覺得很放心。","目標中文":"大姊","延伸單字":"-","詳細解說":"「누나」的敬稱是「누님」，尊稱「언니」則要用「형」的敬稱「형님」。韓國人並不常稱呼關係親密的年長女性為「형님」，而是用來稱呼丈夫的姐姐，或是丈夫的哥哥的妻子等，類似「嫂子」這樣的說法。但如果是自己家的大嫂（自己哥哥的妻子），則稱為「새언니（新的姊姊）」或「올케언니」（올케的意思是오라버니（哥哥）的계집（女人）），而非「형님」。比起自家親戚，對夫家親戚的稱謂要求會更嚴格。※男性之間稱呼「老大哥」也用「형님」。"},
+      {"ID":"028-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"신랑","漢字源（Hanja）":"新郞","詞性":"名","中文意義":"先生（丈夫）","韓文例句":"오늘은 우리 신랑 생일.","例句中文":"今天是我先生的生日。","目標中文":"先生","延伸單字":"낭군 (郞君※時代劇用語) / 장가가다 (娶妻) / 유부남 (有婦男：已婚男人、有婦之夫) / 예비아빠 (豫備-：準爸爸)","詳細解說":"當妻子向第三人談起自己的丈夫時，會使用「남편（男便）」或「신랑（新郎）」。在非正式場合，年長的丈夫有時會稱為「오빠」。孩子出生後，丈夫會變成「애 아빠（孩子他爸）」，妻子會變成「애 엄마（孩子他媽）」。不限於第三人，夫妻之間也會互相稱呼「지민이 아빠（智旻他爸）」、「정국이 엄마（柾國他媽）」。※請注意：如果說「우리 아빠（我家爸爸）」，就是稱呼自己的父親，而非自己的丈夫。"},
+      {"ID":"029-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"와이프","漢字源（Hanja）":"wife","詞性":"名","中文意義":"太太（妻子）","韓文例句":"와이프한테 혼나요.","例句中文":"我要被老婆罵了。","目標中文":"老婆","延伸單字":"시집 (媤-：婆家) / 시집가다 (媤-：出嫁) / 유부녀 (有夫女：已婚女性、有夫之婦) / 예비엄마 (豫備-：準媽媽)","詳細解說":"丈夫稱妻子為「와이프」、「아내（妻子）」或「집사람（家裡的人）」。年輕夫婦會使用第二人稱「자기（親愛的）」或「오빠」，中年或老年夫婦則用「여보（老公／老婆）」或「당신（你）」。「당신」原本是第二人稱尊稱，但僅用於夫妻之間或書面語。除此之外，當兩人處於爭吵的狀態時，它會以口語的形式出現。「당신 아까 뭐라 그랬어?」（你剛剛說什麼？）※「準」的狀態則用「예비（豫備）」表現。訂婚時，就可以說「예비신랑（準新郎）」和「예비신부（準新娘）」。"},
+      {"ID":"030-1","章節（PART）":"PART 1 比較一下跟「人」有關的單字吧","單字（韓文）":"마마보이","漢字源（Hanja）":"mamaboy","詞性":"名","中文意義":"媽寶男","韓文例句":"마마보이 남편과 아들바보 시어머니.","例句中文":"媽寶老公跟溺愛兒子的婆婆。","目標中文":"媽寶","延伸單字":"마마걸 (mamagirl：媽寶女)","詳細解說":"在儒家思想中，養育好兒子被視為母親的使命，因此母子之間的關係會趨於親密。依賴母親的兒子會被周遭的人瞧不起，稱為「마마보이（mamaboy）」。另一方面，溺愛兒子的父母被稱為「아들바보（兒子傻瓜）」。自戀的男人會表現得像他們自己是王子一樣，這就是為什麼他們被稱作「왕자병（王子病）」。換成女性，就是「공주병（公主病）」。溺愛女兒的父母則稱為「딸바보（女兒傻瓜）」。"},
+      {"ID":"078-1","章節（PART）":"PART 2 比較一下社群媒體和電視節目常用的單字吧","單字（韓文）":"깔다","漢字源（Hanja）":"","詞性":"動","中文意義":"鋪，放進","韓文例句":"어플을 새로 깔다.","例句中文":"安裝了新的應用程式。","目標中文":"安裝","延伸單字":"다시 깔다 (重新安裝)","詳細解說":"「安裝」應用程式、APP等到智慧手機或電腦上可以用「설치하다 (設置)」或是「깔다」。而「뜨다」則指影片 (동영상) 或公告 (공지) 等「被公開」的情況，以及在智慧手機或電腦螢幕上「出現」的事物。比如說，「콘서트 공지가 뜨다 (演唱會公告發布了)」、「이상한 광고가 뜨다 (出現了奇怪的廣告)」。Twitter等社群媒體的「실시간 트렌드」(即時趨勢) 略稱為「실트」，而「실트 에 뜨다」則是指「登上即時趨勢」的意思。"},
+      {"ID":"078-2","章節（PART）":"PART 2 比較一下社群媒體和電視節目常用的單字吧","單字（韓文）":"뜨다","漢字源（Hanja）":"","詞性":"動","中文意義":"浮起，出現","韓文例句":"실트에 뜨다.","例句中文":"登上了即時趨勢。","目標中文":"登上","延伸單字":"-","詳細解說":"「安裝」應用程式、APP等到智慧手機或電腦上可以用「설치하다 (設置)」或是「깔다」。而「뜨다」則指影片 (동영상) 或公告 (공지) 等「被公開」的情況，以及在智慧手機或電腦螢幕上「出現」的事物。比如說，「콘서트 공지가 뜨다 (演唱會公告發布了)」、「이상한 광고가 뜨다 (出現了奇怪的廣告)」。Twitter等社群媒體的「실시간 트렌드」(即時趨勢) 略稱為「실트」，而「실트 에 뜨다」則是指「登上即時趨勢」的意思。"},
+      {"ID":"079-1","章節（PART）":"PART 2 比較一下社群媒體和電視節目常用的單字吧","單字（韓文）":"달다","漢字源（Hanja）":"","詞性":"動","中文意義":"掛起，裝上","韓文例句":"해시태그를 달다.","例句中文":"新增主題標籤。","目標中文":"新增","延伸單字":"올리기 업로드 (上傳) / 내려받기 다운로드 (下載)","詳細解說":"「送出」留言、回覆或提及，可以從趨勢下方掛起一連串文字的形象延伸到「달다」的用法。例如，「멘트를 달다 (發表留言)」。「留言」用俗語可以說成「멘트」，也可以說「리플을 남기다 (留下回覆)」。如果是直接傳送給自己的情況，則可以說「멘션이 날라오다 (被提及)」、「답글이 오다 (收到回覆)」。將照片、文章或貼文「刪除」的動作則是「내리다」，例如「실수로 잘못 내렸어요.」(不小心誤刪了。)"},
+      {"ID":"079-2","章節（PART）":"PART 2 比較一下社群媒體和電視節目常用的單字吧","單字（韓文）":"내리다","漢字源（Hanja）":"","詞性":"動","中文意義":"拿下，刪除","韓文例句":"아까 올린 글을 내리다.","例句中文":"我要把剛才發的推文刪了。","目標中文":"刪","延伸單字":"-","詳細解說":"「送出」留言、回覆或提及，可以從趨勢下方掛起一連串文字的形象延伸到「달다」的用法。例如，「멘트를 달다 (發表留言)」。「留言」用俗語可以說成「멘트」，也可以說「리플을 남기다 (留下回覆)」。如果是直接傳送給自己的情況，則可以說「멘션이 날라오다 (被提及)」、「답글이 오다 (收到回覆)」。將照片、文章或貼文「刪除」的動作則是「내리다」，例如「실수로 잘못 내렸어요.」(不小心誤刪了。)"},
+      {"ID":"080-1","章節（PART）":"PART 2 比較一下社群媒體和電視節目常用的單字吧","單字（韓文）":"첫방","漢字源（Hanja）":"-放","詞性":"名","中文意義":"(節目) 首播","韓文例句":"오늘 첫방 놓치지 마시고 꼭 보세요.","例句中文":"請不要錯過今天的首播。","目標中文":"首播","延伸單字":"첫눈 (初雪) 첫사랑 (初戀) / 첫차 (首班電車・公車) / 첫 마디 (第一句話，第一聲) / 첫 곡 (第一首歌，第一曲)","詳細解說":"「첫방 (首播)」是「첫 방송 (初回放送)」的略稱。「본방」則是相對於「재방송 (再放送)」的「本放送」的略稱。目前風靡全球的串流影音觀賞服務也已在韓國推出，名為「다시보기」，不是「다시보기」或「재방송」，而是同步的「即時觀看」被稱為「본방사수 (本放死守)」。「본방사수 하실 거죠?」(你會本放死守嗎？)「事前錄製」是「사녹」，略稱自「사전녹화 (事前錄畫)」。「劇透」則是「스포」，略稱自「스포일러 (spoiler)」。"},
+      {"ID":"081-1","章節（PART）":"PART 2 比較一下社群媒體和電視節目常用的單字吧","單字（韓文）":"막콘","漢字源（Hanja）":"-con 《俗》","詞性":"名","中文意義":"演唱會終場","韓文例句":"막콘 파이팅!","例句中文":"終場了，加油！","目標中文":"終場","延伸單字":"첫콘 (演唱會首場) / 마지막 회 (最終回) / 열린 결말 (開放式結局)","詳細解說":"「콘서트 마지막 날」是「演唱會的最後一天」。「막-」就是「막내 (老么)」的「막」，是表示「마지막 (最後)」的前綴。「末班車」是「막차 (-車)」。「막차 끊겼다고요?」(末班車開走了嗎？)「막바지」와「막판」都是指「結束，最後階段」，「마감」則表示「截止，關店」，例如「저희 식당 9시 마감이에요.」(我們餐廳是九點關門。)。「마무리」是「完成、結束」，例如「그럼 마무리를 하도록 합시다.」(那就收工吧。)"},
+      {"ID":"082-1","章節（PART）":"PART 2 比較一下社群媒體和電視節目常用的單字吧","單字（韓文）":"먹방","漢字源（Hanja）":"","詞性":"名","中文意義":"吃播","韓文例句":"배 고프니까 먹방 해볼까요?","例句中文":"肚子正好餓了，來嘗試一下吃播吧？","目標中文":"吃播","延伸單字":"쿡방 (cook 放：煮播，烹飪影片) / 잠방 (- 放：睡播，播放睡覺樣子的影片，或睡覺時看的影片)","詳細解說":"這是「먹는 방송」(吃+放送) 的略稱，指的是內容只有吃東西的影片。這類讓觀眾聽到咀嚼或吞嚥食物聲音、刺激大腦產生愉悅感的影片，屬於一種ASMR (自發性知覺神經反應) 影片。它迅速風靡世界，尤其受到正在實踐「다이어트 (節食)」或「자취생 (自炊生：一人生活)」的人們喜愛。另外還有略自「눕는 방송 (躺著放送)」的「눕방 (躺播)」這類影片通常是在床上等舒適的位置，以放鬆的姿態拍攝。"}
+    ];
+
+    const SRS_INTERVALS = [1, 2, 4, 7, 15, 30, 90]; 
+    const LEARNING_TARGET = 5;
+
+    // ==========================================
+    // 3. 輔助函數
+    // ==========================================
+    const calculateNextReviewDate = (stage) => {
+      const daysToAdd = SRS_INTERVALS[Math.min(stage, SRS_INTERVALS.length - 1)] || 1;
+      const date = new Date();
+      date.setDate(date.getDate() + daysToAdd);
+      date.setHours(0, 0, 0, 0);
+      return date.getTime();
+    };
+
+    const getTodayString = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+    };
+
+    const getDaysDiff = (dateStr1, dateStr2) => {
+      if (!dateStr1 || !dateStr2) return 0;
+      const d1 = new Date(dateStr1);
+      const d2 = new Date(dateStr2);
+      return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
+    };
+
+    const maskExample = (example, word) => {
+      let regex = new (window.RegExp)(word, 'gi');
+      let masked = example.replace(regex, '____');
+      if (masked !== example) return masked;
+
+      if (word.endsWith('다')) {
+        const stem = word.slice(0, -1);
+        if (stem.length > 0) {
+          regex = new (window.RegExp)(stem + '[가-힣]*', 'g');
+          masked = example.replace(regex, '____');
+          if (masked !== example) return masked;
+        }
+        const tokens = example.split(' ');
+        if (tokens.length > 1) {
+          const punctuation = tokens[tokens.length - 1].match(/[.!?]$/) ? tokens[tokens.length - 1].match(/[.!?]$/)[0] : '';
+          tokens[tokens.length - 1] = '____' + punctuation;
+          return tokens.join(' ');
+        }
+      }
+      return example;
+    };
+
+    const highlightTargetChinese = (sentence, target) => {
+      if (!target || target === '-') return sentence;
+      const parts = sentence.split(target);
+      if (parts.length === 1) return sentence;
+      
+      return (
+        <span>
+          {parts.map((part, i) => (
+            <React.Fragment key={i}>
+              {part}
+              {i !== parts.length - 1 && <span className="font-bold underline decoration-pink-400 decoration-2 underline-offset-4">{target}</span>}
+            </React.Fragment>
+          ))}
+        </span>
+      );
+    };
+
+    const shuffleArray = (array) => [...array].sort(() => Math.random() - 0.5);
+
+    // ==========================================
+    // 4. 主要 App 元件
+    // ==========================================
+    function App() {
+      const [activeTab, setActiveTab] = useState('learning'); 
+      const [isLearningMenuOpen, setIsLearningMenuOpen] = useState(true); 
+      const [globalLearnQueue, setGlobalLearnQueue] = useState([]); 
+      
+      const [userData, setUserData] = useState(() => {
+        try {
+          const saved = localStorage.getItem('krAppUserProgressV3');
+          if (saved) return JSON.parse(saved);
+        } catch (e) { console.error(e); }
+        return {
+          learning: { streak: 0, lastGoalDate: '', todayCount: 0, todayDate: '' },
+          challenge: { streak: 0, lastGoalDate: '', todayCount: 0, todayDate: '', extraBlocks: 0 },
+          partProgress: {}, 
+          wordStats: {} 
+        };
+      });
+
+      const learnedWordsCount = Object.keys(userData.wordStats).length;
+      const challengeTarget = Math.max(1, Math.min(20, learnedWordsCount));
+
+      useEffect(() => {
+        localStorage.setItem('krAppUserProgressV3', JSON.stringify(userData));
+      }, [userData]);
+
+      const markLearningComplete = (wordId) => {
+        setUserData(prev => {
+          const todayStr = getTodayString();
+          const newWordStats = { ...prev.wordStats };
+
+          if (!newWordStats[wordId]) {
+             newWordStats[wordId] = { stage: 0, nextReviewDate: calculateNextReviewDate(0), lastTestedDate: todayStr };
+          } else if (newWordStats[wordId].stage === 0) {
+             newWordStats[wordId] = { ...newWordStats[wordId], stage: 0, nextReviewDate: calculateNextReviewDate(0) };
+          }
+
+          const newLearning = { ...prev.learning };
+          if (newLearning.todayDate !== todayStr) {
+             newLearning.todayCount = 0;
+             newLearning.todayDate = todayStr;
+          }
+
+          newLearning.todayCount += 1;
+          if (newLearning.todayCount === LEARNING_TARGET) { 
+             const diff = getDaysDiff(newLearning.lastGoalDate, todayStr);
+             if (diff === 1) newLearning.streak += 1;
+             else if (diff > 1 || newLearning.lastGoalDate === '') newLearning.streak = 1;
+             newLearning.lastGoalDate = todayStr;
+          }
+
+          return { ...prev, learning: newLearning, wordStats: newWordStats };
+        });
+      };
+
+      const incrementChallengeProgress = (target) => {
+        setUserData(prev => {
+          const todayStr = getTodayString();
+          const newChallenge = { ...prev.challenge };
+          
+          if (newChallenge.todayDate !== todayStr) {
+             newChallenge.todayCount = 0;
+             newChallenge.todayDate = todayStr;
+          }
+
+          newChallenge.todayCount += 1;
+          
+          if (newChallenge.todayCount === target && target > 0) {
+             const diff = getDaysDiff(newChallenge.lastGoalDate, todayStr);
+             if (diff === 1) newChallenge.streak += 1;
+             else if (diff > 1 || newChallenge.lastGoalDate === '') newChallenge.streak = 1;
+             newChallenge.lastGoalDate = todayStr;
+          }
+          return { ...prev, challenge: newChallenge };
+        });
+      };
+
+      const markChallengeSRS = (wordId, isCorrect) => {
+        setUserData(prev => {
+          const todayStr = getTodayString();
+          const newWordStats = { ...prev.wordStats };
+          let stat = newWordStats[wordId] ? { ...newWordStats[wordId] } : { stage: 1 };
+          
+          if (isCorrect) {
+             stat.stage += 1;
+          } else {
+             stat.stage = 0; 
+          }
+          
+          stat.nextReviewDate = calculateNextReviewDate(stat.stage);
+          stat.lastTestedDate = todayStr;
+          newWordStats[wordId] = stat;
+          
+          return { ...prev, wordStats: newWordStats };
+        });
+      };
+
+      const updatePartProgress = (partName, index) => {
+        setUserData(prev => {
+          const highest = prev.partProgress[partName] || 0;
+          return {
+            ...prev,
+            partProgress: {
+              ...prev.partProgress,
+              [partName]: Math.max(highest, index + 1)
+            }
+          };
+        });
+      };
+
+      const addExtraBlock = () => {
+        setUserData(prev => ({ ...prev, challenge: { ...prev.challenge, extraBlocks: prev.challenge.extraBlocks + 1 } }));
+      };
+
+      const isLearning = activeTab === 'learning';
+      const currentStats = isLearning ? userData.learning : userData.challenge;
+      const currentTarget = isLearning ? LEARNING_TARGET : challengeTarget;
+      const isReached = currentStats.todayCount >= currentTarget && currentTarget > 0;
+      const progressPercent = Math.min((currentStats.todayCount / currentTarget) * 100, 100) || 0;
+
+      return (
+        <div className="min-h-screen bg-pink-50 text-slate-800 font-sans pb-28 selection:bg-pink-200 flex flex-col">
+          <header className="bg-white px-4 py-3 shadow-sm sticky top-0 z-10 flex items-center justify-between border-b border-pink-100">
+            <div className="flex items-center gap-2">
+              <div className={`p-2 rounded-full flex items-center justify-center transition-colors ${isReached ? 'bg-orange-100 text-orange-500 animate-pulse' : 'bg-slate-100 text-slate-400'}`}>
+                <Flame size={20} fill="currentColor" />
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{isLearning ? '主動學習連續' : '每日挑戰連續'}</p>
+                <p className="text-sm font-black text-slate-800">{currentStats.streak} 天</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+               {!isLearning && userData.challenge.extraBlocks > 0 && (
+                 <div className="flex gap-1">
+                    {Array.from({ length: userData.challenge.extraBlocks }).map((_, i) => (
+                      <div key={i} className="w-3 h-6 bg-yellow-400 rounded-sm shadow-sm border border-yellow-500"></div>
+                    ))}
+                 </div>
+               )}
+               
+               <div className="relative w-10 h-10 flex items-center justify-center">
+                 <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                   <path className="text-slate-100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="4"/>
+                   <path className={`${isReached ? 'text-orange-500' : 'text-pink-500'} transition-all duration-1000 ease-out`} strokeDasharray={`${progressPercent}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/>
+                 </svg>
+                 <span className="absolute text-[10px] font-bold text-slate-600">{currentStats.todayCount}</span>
+               </div>
+            </div>
+          </header>
+
+          <main className="max-w-md mx-auto p-4 w-full flex-1 flex flex-col relative">
+            <div className={`flex-1 flex flex-col ${activeTab === 'learning' ? '' : 'hidden'}`}>
+              <LearningArea 
+                vocabData={vocabData} 
+                userData={userData} 
+                globalLearnQueue={globalLearnQueue}
+                setGlobalLearnQueue={setGlobalLearnQueue}
+                updatePartProgress={updatePartProgress}
+                markLearningComplete={markLearningComplete}
+                isLearningMenuOpen={isLearningMenuOpen}
+                setIsLearningMenuOpen={setIsLearningMenuOpen}
+              />
+            </div>
+            <div className={`flex-1 flex flex-col ${activeTab === 'challenge' ? '' : 'hidden'}`}>
+              <DailyChallenge 
+                vocabData={vocabData} 
+                userData={userData} 
+                challengeTarget={challengeTarget}
+                incrementChallengeProgress={incrementChallengeProgress}
+                markChallengeSRS={markChallengeSRS}
+                addExtraBlock={addExtraBlock}
+              />
+            </div>
+          </main>
+
+          <nav className="fixed bottom-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-100 flex justify-around max-w-md left-1/2 -translate-x-1/2 z-50 pb-safe pt-2 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
+            <button 
+              onClick={() => { setActiveTab('learning'); setIsLearningMenuOpen(true); }}
+              className={`flex-1 flex flex-col items-center py-2 transition-colors ${(activeTab === 'learning' && isLearningMenuOpen) ? 'text-pink-600' : 'text-slate-400 hover:text-pink-400'}`}
+            >
+              <Home size={24} strokeWidth={(activeTab === 'learning' && isLearningMenuOpen) ? 2.5 : 2} />
+              <span className="text-[11px] mt-1 font-bold">章節選單</span>
+            </button>
+
+            <button 
+              onClick={() => { setActiveTab('learning'); setIsLearningMenuOpen(false); }}
+              className={`flex-1 flex flex-col items-center py-2 transition-colors ${(activeTab === 'learning' && !isLearningMenuOpen) ? 'text-pink-600' : 'text-slate-400 hover:text-pink-400'}`}
+            >
+              <BookOpen size={24} strokeWidth={(activeTab === 'learning' && !isLearningMenuOpen) ? 2.5 : 2} />
+              <span className="text-[11px] mt-1 font-bold">當前學習</span>
+            </button>
+
+            <button 
+              onClick={() => setActiveTab('challenge')}
+              className={`flex-1 flex flex-col items-center py-2 transition-colors ${activeTab === 'challenge' ? 'text-pink-600' : 'text-slate-400 hover:text-pink-400'}`}
+            >
+              <Swords size={24} strokeWidth={activeTab === 'challenge' ? 2.5 : 2} />
+              <span className="text-[11px] mt-1 font-bold">每日挑戰</span>
+            </button>
+          </nav>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 5. 主動學習區 (Learning Area)
+    // ==========================================
+    function LearningArea({ vocabData, userData, globalLearnQueue, setGlobalLearnQueue, updatePartProgress, markLearningComplete, isLearningMenuOpen, setIsLearningMenuOpen }) {
+      const [selectedPart, setSelectedPart] = useState('');
+      const [activePart, setActivePart] = useState('');
+      const [learningList, setLearningList] = useState([]);
+      const [currentIndex, setCurrentIndex] = useState(0);
+      const [learningPhase, setLearningPhase] = useState('flashcard'); 
+      const [userInput, setUserInput] = useState('');
+      const [showDetail, setShowDetail] = useState(false);
+      const [errorMsg, setErrorMsg] = useState('');
+      
+      const [batchQuestionIndex, setBatchQuestionIndex] = useState(0);
+      const [batchQuestions, setBatchQuestions] = useState([]);
+
+      const parts = [...new Set(vocabData.map(w => w['章節（PART）']))];
+
+      const startLearning = (resumeIndex = 0) => {
+        const list = vocabData.filter(w => w['章節（PART）'] === selectedPart);
+        if (list.length === 0) return;
+        
+        const safeIndex = Math.min(resumeIndex, list.length - 1);
+        
+        setLearningList(list);
+        setCurrentIndex(safeIndex);
+        setLearningPhase('flashcard');
+        setActivePart(selectedPart);
+        setIsLearningMenuOpen(false);
+        setShowDetail(false);
+      };
+
+      const handleResume = () => {
+        if (selectedPart === activePart && learningList.length > 0) {
+          setIsLearningMenuOpen(false);
+          return;
+        }
+        const highestIndex = userData.partProgress[selectedPart] || 0;
+        startLearning(highestIndex);
+      };
+
+      if (isLearningMenuOpen) {
+        return (
+          <div className="flex flex-col gap-6 animate-fade-in pt-6">
+            {learningList.length > 0 && (
+              <div className="bg-white p-6 rounded-3xl shadow-sm border border-indigo-100 mb-2">
+                <h3 className="text-sm font-bold text-slate-500 mb-4">目前正在學習...</h3>
+                <button 
+                  onClick={() => setIsLearningMenuOpen(false)}
+                  className="w-full py-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold rounded-2xl text-lg transition-transform active:scale-95 flex items-center justify-center gap-2 border border-indigo-200"
+                >
+                  <Play fill="currentColor" size={20} />
+                  返回 {activePart.substring(0, 15)}...
+                </button>
+              </div>
+            )}
+
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-pink-100">
+              <h2 className="text-xl font-bold mb-6 text-slate-800 flex items-center gap-2">
+                <BookOpen className="text-pink-500"/> 選擇章節
+              </h2>
+              
+              <div className="space-y-4">
+                <select className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-lg outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100 transition-all font-medium text-slate-700"
+                  value={selectedPart} onChange={(e) => setSelectedPart(e.target.value)}>
+                  <option value="">請選擇 PART</option>
+                  {parts.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+
+                {selectedPart && (
+                  <div className="flex gap-2 mt-4">
+                    <button onClick={() => startLearning(0)} className="flex-1 py-4 bg-pink-100 hover:bg-pink-200 text-pink-700 font-bold rounded-2xl text-lg transition-transform active:scale-95">
+                      從頭開始
+                    </button>
+                    {userData.partProgress[selectedPart] > 0 && (
+                      <button onClick={handleResume} className="flex-[2] py-4 bg-pink-500 hover:bg-pink-600 text-white font-bold rounded-2xl text-lg transition-transform active:scale-95 shadow-lg shadow-pink-200 flex justify-center items-center gap-2">
+                        <Play size={20} fill="currentColor" /> 繼續進度
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (learningList.length === 0) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[75vh] animate-fade-in text-center px-4 pt-6">
+            <div className="w-24 h-24 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mb-6">
+              <BookOpen size={48} strokeWidth={1.5} />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800 mb-4">尚未選擇章節</h2>
+            <p className="text-slate-500 mb-8 leading-relaxed font-medium">
+              請先到「章節選單」選擇要開始學習的單元。
+            </p>
+            <button 
+              onClick={() => setIsLearningMenuOpen(true)}
+              className="w-full max-w-xs py-4 bg-pink-500 hover:bg-pink-600 text-white font-bold rounded-2xl text-lg transition-transform active:scale-95 shadow-lg shadow-pink-200"
+            >
+              前往選單
+            </button>
+          </div>
+        );
+      }
+
+      const currentWord = learningList[currentIndex];
+
+      const checkMicroQuiz = () => {
+        if (userInput.trim() === currentWord['單字（韓文）']) {
+          setUserInput('');
+          setErrorMsg('');
+          
+          updatePartProgress(activePart, currentIndex); 
+          markLearningComplete(currentWord.ID); 
+          
+          const newQueue = [...globalLearnQueue, currentWord];
+          setGlobalLearnQueue(newQueue); 
+          
+          if (newQueue.length >= 5) {
+            prepareBatchReview(newQueue);
+          } else {
+            goToNextWord();
+          }
+        } else {
+          setErrorMsg('拼寫錯誤，請再試一次！');
+        }
+      };
+
+      const goToNextWord = () => {
+        if (currentIndex + 1 < learningList.length) {
+          setCurrentIndex(prev => prev + 1);
+          setLearningPhase('flashcard');
+          setShowDetail(false);
+        } else {
+          setIsLearningMenuOpen(true);
+          alert('恭喜完成本章節！您可以選擇其他章節繼續學習。');
+        }
+      };
+
+      const prepareBatchReview = (queueToReview) => {
+        const wordsToReview = queueToReview.slice(-5);
+        const questions = wordsToReview.map((word, i) => {
+          const type = i % 3; 
+          let options = [];
+          if (type === 2) {
+            const others = shuffleArray(vocabData.filter(w => w.ID !== word.ID)).slice(0, 3);
+            options = shuffleArray([word, ...others]);
+          }
+          return { word, type, options };
+        });
+        setBatchQuestions(shuffleArray(questions));
+        setBatchQuestionIndex(0);
+        setLearningPhase('batchreview');
+      };
+
+      const checkBatchReview = (answer) => {
+        const currentQ = batchQuestions[batchQuestionIndex];
+        let isCorrect = false;
+
+        if (currentQ.type === 2) {
+          isCorrect = (answer === currentQ.word['中文意義']);
+        } else {
+          isCorrect = (userInput.trim() === currentQ.word['單字（韓文）']);
+        }
+
+        if (isCorrect) {
+          setUserInput('');
+          setErrorMsg('');
+          advanceBatchReview();
+        } else {
+           setErrorMsg(`答錯了！正確答案：${currentQ.word['單字（韓文）']} (${currentQ.word['中文意義']})`);
+           setTimeout(() => {
+               setUserInput('');
+               setErrorMsg('');
+               advanceBatchReview();
+           }, 2000);
+        }
+      };
+
+      const advanceBatchReview = () => {
+        if (batchQuestionIndex + 1 < 5) {
+          setBatchQuestionIndex(prev => prev + 1);
+        } else {
+          alert('5 字複習完成！');
+          setGlobalLearnQueue(prev => prev.slice(0, -5));
+          goToNextWord();
+        }
+      };
+
+      if (learningPhase === 'flashcard') {
+        const tags = currentWord['延伸單字'] ? currentWord['延伸單字'].split('/').map(t => t.trim()).filter(t => t !== '-') : [];
+
+        return (
+          <div className="flex flex-col min-h-[75vh] animate-slide-up mt-2">
+            <div className="mb-4 text-xs font-bold text-slate-400 flex items-center justify-between uppercase tracking-wider">
+              <button onClick={() => setIsLearningMenuOpen(true)} className="flex items-center gap-1 hover:text-pink-500 transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-100 active:scale-95">
+                <Home size={14} /> <span className="truncate max-w-[140px]">{currentWord['章節（PART）']}</span>
+              </button>
+              <span className="shrink-0 flex items-center">累積學習: {globalLearnQueue.length} / 5</span>
+            </div>
+            
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 flex-1 flex flex-col relative overflow-hidden mb-6">
+              <div className="h-48 bg-slate-50 relative flex items-center justify-center border-b border-slate-100">
+                 <img 
+                   src={`./images/${currentWord.ID}.png`} 
+                   alt={currentWord['單字（韓文）']} 
+                   className="h-full object-contain p-4"
+                   onError={(e) => {
+                     e.target.style.display = 'none';
+                     e.target.nextSibling.style.display = 'flex';
+                   }}
+                 />
+                 <div className="hidden absolute inset-0 items-center justify-center text-slate-300 flex-col gap-2">
+                   <ImageIcon size={48} strokeWidth={1} />
+                   <span className="text-sm font-medium">圖片載入失敗</span>
+                 </div>
+              </div>
+
+              <div className="p-6 flex flex-col flex-1">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h2 className="text-4xl font-black text-slate-800 mb-1">{currentWord['單字（韓文）']}</h2>
+                    {currentWord['漢字源（Hanja）'] && <p className="text-sm font-bold text-pink-400">[{currentWord['漢字源（Hanja）']}]</p>}
+                  </div>
+                  <span className="bg-slate-100 text-slate-500 text-xs font-bold px-3 py-1.5 rounded-lg">{currentWord['詞性']}</span>
+                </div>
+                
+                <div className="bg-pink-50 w-full p-4 rounded-2xl mb-6">
+                  <p className="text-xl font-bold text-slate-800">{currentWord['中文意義']}</p>
+                </div>
+
+                <div className="w-full text-left bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-4">
+                  <p className="text-lg font-medium text-slate-800 mb-2 leading-relaxed">{currentWord['韓文例句']}</p>
+                  <p className="text-slate-500 text-sm leading-relaxed">{currentWord['例句中文']}</p>
+                </div>
+
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {tags.map((tag, i) => (
+                      <span key={i} className="text-xs font-bold px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg">{tag}</span>
+                    ))}
+                  </div>
+                )}
+
+                {currentWord['詳細解說'] && currentWord['詳細解說'] !== '-' && (
+                  <div className="mt-auto">
+                    <button 
+                      onClick={() => setShowDetail(!showDetail)}
+                      className="flex items-center justify-between w-full p-4 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-sm active:bg-slate-50"
+                    >
+                      查看詳細解說
+                      {showDetail ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                    </button>
+                    {showDetail && (
+                      <div className="p-4 mt-2 bg-slate-50 rounded-2xl text-sm text-slate-600 leading-relaxed animate-fade-in border border-slate-100">
+                        {currentWord['詳細解說']}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setLearningPhase('microquiz')}
+              className="w-full py-4 bg-pink-500 text-white font-bold rounded-2xl text-xl flex shrink-0 items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-pink-200"
+            >
+              我記住了 <ArrowRight size={24} />
+            </button>
+          </div>
+        );
+      }
+
+      if (learningPhase === 'microquiz') {
+        return (
+          <div className="flex flex-col min-h-[75vh] animate-fade-in mt-2">
+            <div className="mb-2 text-xs font-bold text-slate-400 flex items-center justify-between uppercase tracking-wider">
+              <button onClick={() => setIsLearningMenuOpen(true)} className="flex items-center gap-1 hover:text-pink-500 transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-100 active:scale-95">
+                <Home size={14} /> <span>返回選單</span>
+              </button>
+              <span className="shrink-0 flex items-center">累積學習: {globalLearnQueue.length} / 5</span>
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-sm border border-pink-100 p-8 flex-1 flex flex-col items-center justify-center text-center mt-2">
+              <div className="w-16 h-16 bg-pink-50 text-pink-500 rounded-full flex items-center justify-center mb-6">
+                <BookOpen size={32} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-800 mb-2">遮蔽測驗</h3>
+              <p className="text-slate-400 mb-8 font-medium text-sm">請輸入剛才學習的韓文單字</p>
+              
+              <div className="bg-pink-50 w-full p-4 rounded-2xl mb-8 border border-pink-100">
+                <p className="text-2xl font-bold text-slate-800">{currentWord['中文意義']}</p>
+              </div>
+
+              <div className="w-full mb-4">
+                <input 
+                  type="text" 
+                  placeholder="輸入韓文..."
+                  className="w-full text-center text-3xl font-black p-4 border-b-2 border-slate-200 focus:border-pink-500 outline-none bg-transparent transition-colors text-slate-800"
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                />
+                <div className="flex justify-end mt-2">
+                  <button 
+                    onClick={() => {
+                      setLearningPhase('flashcard');
+                      setUserInput('');
+                      setErrorMsg('');
+                    }}
+                    className="text-sm font-bold text-slate-400 hover:text-pink-500 transition-colors active:scale-95 px-2 py-1"
+                  >
+                    忘記了？返回查看
+                  </button>
+                </div>
+              </div>
+              
+              {errorMsg && <p className="text-red-500 font-bold text-sm bg-red-50 py-2 px-4 rounded-lg animate-shake">{errorMsg}</p>}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 shrink-0">
+              <button 
+                onClick={checkMicroQuiz}
+                className="w-full py-4 bg-slate-800 text-white font-bold rounded-2xl text-xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-slate-200"
+              >
+                確認拼寫 <Check size={24} />
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      if (learningPhase === 'batchreview') {
+        const currentQ = batchQuestions[batchQuestionIndex];
+
+        return (
+          <div className="flex flex-col min-h-[75vh] animate-slide-up">
+            <div className="mb-4 text-xs font-black text-pink-500 tracking-wider flex justify-between items-center bg-pink-100 px-4 py-3 rounded-xl mt-2">
+              <button onClick={() => setIsLearningMenuOpen(true)} className="flex items-center gap-1 hover:text-pink-700 transition-colors active:scale-95 bg-white/50 px-2 py-1 rounded-md">
+                <Home size={14} /> <span>暫停</span>
+              </button>
+              <span className="flex items-center gap-1"><RefreshCw size={14} /> 階段測驗</span>
+              <span>{batchQuestionIndex + 1} / 5</span>
+            </div>
+            
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex-1 flex flex-col justify-center items-center text-center relative">
+              
+              {currentQ.type === 0 && (
+                <>
+                  <p className="text-sm font-bold text-slate-400 mb-8 uppercase tracking-widest">看中文寫韓文</p>
+                  <h2 className="text-4xl font-black text-slate-800 mb-10">{currentQ.word['中文意義']}</h2>
+                  <input 
+                    type="text" 
+                    placeholder="輸入韓文拼寫..."
+                    className="w-full text-center text-3xl font-black p-4 border-b-2 border-slate-200 focus:border-pink-500 outline-none bg-transparent transition-colors mb-4"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                  />
+                </>
+              )}
+
+              {currentQ.type === 1 && (
+                <>
+                  <p className="text-sm font-bold text-slate-400 mb-8 uppercase tracking-widest">完成句子</p>
+                  <p className="text-xl font-medium text-slate-800 mb-6 bg-slate-50 p-6 rounded-2xl border border-slate-100 leading-relaxed w-full">
+                    {maskExample(currentQ.word['韓文例句'], currentQ.word['單字（韓文）'])}
+                  </p>
+                  <p className="text-slate-500 font-medium mb-8">{currentQ.word['例句中文']}</p>
+                  <input 
+                    type="text" 
+                    placeholder="填入缺少的單字..."
+                    className="w-full text-center text-3xl font-black p-4 border-b-2 border-slate-200 focus:border-pink-500 outline-none bg-transparent transition-colors mb-4"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                  />
+                </>
+              )}
+
+              {currentQ.type === 2 && (
+                <>
+                  <p className="text-sm font-bold text-slate-400 mb-8 uppercase tracking-widest">選出正確意思</p>
+                  <h2 className="text-5xl font-black text-slate-800 mb-10">{currentQ.word['單字（韓文）']}</h2>
+                  <div className="w-full flex flex-col gap-3 mt-auto">
+                    {currentQ.options.map((opt, idx) => (
+                      <button 
+                        key={idx}
+                        onClick={() => checkBatchReview(opt['中文意義'])}
+                        className="w-full p-4 bg-slate-50 hover:bg-pink-50 text-slate-700 hover:text-pink-600 font-bold border border-slate-200 hover:border-pink-300 rounded-2xl text-lg transition-all active:scale-95"
+                      >
+                        {opt['中文意義']}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {errorMsg && <p className="text-red-500 font-bold text-sm bg-red-50 py-2 px-4 rounded-lg mt-4 animate-shake">{errorMsg}</p>}
+            </div>
+            
+            {currentQ.type !== 2 && (
+              <button 
+                onClick={() => checkBatchReview()}
+                className="mt-6 w-full py-4 bg-slate-800 text-white font-bold rounded-2xl text-xl flex shrink-0 items-center justify-center gap-2 active:scale-95 transition-all shadow-lg"
+              >
+                送出答案
+              </button>
+            )}
+          </div>
+        );
+      }
+
+      return null;
+    }
+
+    // ==========================================
+    // 6. 每日挑戰區 (Challenge Area)
+    // ==========================================
+    function DailyChallenge({ vocabData, userData, challengeTarget, incrementChallengeProgress, markChallengeSRS, addExtraBlock }) {
+      const [challengeState, setChallengeState] = useState('intro'); // intro | empty | playing | summary
+      const [dailyWords, setDailyWords] = useState([]);
+      const [currentIndex, setCurrentIndex] = useState(0);
+      const [failedQueue, setFailedQueue] = useState([]);
+      const [userInput, setUserInput] = useState('');
+      const [showAnswer, setShowAnswer] = useState(false);
+      const [stats, setStats] = useState({ due: 0, other: 0 });
+      const [isExtraMode, setIsExtraMode] = useState(false);
+      const [showDetail, setShowDetail] = useState(false);
+
+      const prepareDaily = () => {
+        let learned = vocabData.filter(w => userData.wordStats[w.ID]);
+        
+        if (learned.length === 0) {
+          setChallengeState('empty');
+          return;
+        }
+
+        const todayTime = Date.now();
+        let dueWords = learned.filter(w => userData.wordStats[w.ID].nextReviewDate <= todayTime);
+        dueWords = shuffleArray(dueWords).slice(0, 20);
+
+        let otherWords = learned.filter(w => !dueWords.includes(w));
+        otherWords = shuffleArray(otherWords).slice(0, 20 - dueWords.length);
+
+        let combined = shuffleArray([...dueWords, ...otherWords]);
+
+        setStats({ due: dueWords.length, other: otherWords.length });
+        setDailyWords(combined);
+        setCurrentIndex(0);
+        setFailedQueue([]);
+        setChallengeState('intro');
+        setIsExtraMode(false);
+      };
+
+      useEffect(() => {
+        if (challengeState === 'intro' || challengeState === 'empty') {
+          prepareDaily();
+        }
+      }, [userData.wordStats]);
+
+      const startChallenge = () => {
+        setChallengeState('playing');
+        setUserInput('');
+        setShowAnswer(false);
+      };
+
+      const startExtraChallenge = () => {
+         let learned = vocabData.filter(w => userData.wordStats[w.ID]);
+         if(learned.length < 5) return alert("已學單字不足 5 個，請先到主動學習區學習更多！");
+         
+         let extraWords = shuffleArray(learned).slice(0, 5);
+         setDailyWords(extraWords);
+         setCurrentIndex(0);
+         setFailedQueue([]);
+         setChallengeState('playing');
+         setIsExtraMode(true);
+      };
+
+      if (challengeState === 'empty') {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[75vh] animate-fade-in text-center px-4 pt-6">
+            <div className="w-24 h-24 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mb-6">
+              <BookOpen size={48} strokeWidth={1.5} />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800 mb-4">目前沒有可挑戰的單字</h2>
+            <p className="text-slate-500 mb-8 leading-relaxed font-medium">
+              每日挑戰區只會出現您在<br/>「主動學習區」學習過的單字。<br/>請先完成學習任務來累積挑戰字庫！
+            </p>
+          </div>
+        );
+      }
+
+      const currentWord = dailyWords[currentIndex];
+
+      const handleAnswerSubmit = () => {
+        if (showAnswer) {
+          const nextFailedQueue = [...failedQueue, { ...currentWord, isRetry: true }];
+          setFailedQueue(nextFailedQueue);
+          goToNextWordInArray(nextFailedQueue);
+          return;
+        }
+
+        if (userInput.trim() === currentWord['單字（韓文）']) {
+          if (!isExtraMode) {
+            if (!currentWord.isRetry) markChallengeSRS(currentWord.ID, true); 
+            incrementChallengeProgress(challengeTarget); 
+          }
+          goToNextWordInArray(failedQueue);
+        } else {
+          if (!currentWord.isRetry && !showAnswer) {
+            markChallengeSRS(currentWord.ID, false); 
+          }
+          setShowAnswer(true);
+        }
+      };
+
+      const goToNextWordInArray = (currentFailedQueue) => {
+        if (currentIndex + 1 < dailyWords.length) {
+          setCurrentIndex(prev => prev + 1);
+        } else {
+          if (currentFailedQueue.length > 0) {
+            setDailyWords(shuffleArray(currentFailedQueue));
+            setFailedQueue([]);
+            setCurrentIndex(0);
+          } else {
+            if(isExtraMode) addExtraBlock();
+            setChallengeState('summary');
+          }
+        }
+        setUserInput('');
+        setShowAnswer(false);
+        setShowDetail(false);
+      };
+
+      if (challengeState === 'intro') {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[75vh] animate-fade-in text-center px-4 pt-6">
+            <div className="w-24 h-24 bg-pink-100 text-pink-500 rounded-full flex items-center justify-center mb-6 shadow-inner">
+              <Swords size={48} strokeWidth={1.5} />
+            </div>
+            <h2 className="text-3xl font-black text-slate-800 mb-2">每日挑戰</h2>
+            <p className="text-slate-500 mb-8 font-medium">目標：{challengeTarget} 個單字</p>
+            
+            <div className="bg-white border border-slate-100 p-6 rounded-3xl w-full max-w-xs mb-8 shadow-sm">
+               <div className="flex justify-between items-center mb-4 pb-4 border-b border-slate-100">
+                 <span className="font-bold text-slate-600">待複習 (遺忘曲線)</span>
+                 <span className="text-xl font-black text-orange-500">{stats.due}</span>
+               </div>
+               <div className="flex justify-between items-center">
+                 <span className="font-bold text-slate-600">其他已學單字</span>
+                 <span className="text-xl font-black text-indigo-500">{stats.other}</span>
+               </div>
+            </div>
+
+            <button 
+              onClick={startChallenge}
+              className="w-full max-w-xs py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-2xl text-xl transition-transform active:scale-95 shadow-lg"
+            >
+              開始測驗
+            </button>
+          </div>
+        );
+      }
+
+      if (challengeState === 'playing') {
+        let daysAgoStr = "第一次挑戰";
+        if (currentWord.srsData && currentWord.srsData.lastTestedDate) {
+            const diffDays = getDaysDiff(currentWord.srsData.lastTestedDate, getTodayString());
+            if (diffDays > 0) daysAgoStr = `${diffDays} 天前出現過`;
+            else daysAgoStr = "今天學習過";
+        }
+
+        const tags = currentWord['延伸單字'] ? currentWord['延伸單字'].split('/').map(t => t.trim()).filter(t => t !== '-') : [];
+
+        return (
+          <div className="flex flex-col min-h-[75vh] animate-slide-up mt-2">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="text-xs font-black text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg tracking-wider">
+                進度 {currentIndex + 1} / {dailyWords.length}
+              </div>
+              <div className="text-xs font-bold text-pink-500 bg-pink-100 px-3 py-1.5 rounded-lg">
+                {daysAgoStr}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 flex-1 flex flex-col justify-center relative overflow-hidden mb-6">
+              
+              <div className="h-40 bg-slate-50 relative flex items-center justify-center border-b border-slate-100">
+                 <img 
+                   src={`./images/${currentWord.ID}.png`} 
+                   alt="單字圖片" 
+                   className="h-full object-contain p-4 mix-blend-multiply"
+                   onError={(e) => {
+                     e.target.style.display = 'none';
+                     e.target.nextSibling.style.display = 'flex';
+                   }}
+                 />
+                 <div className="hidden absolute inset-0 items-center justify-center text-slate-300 flex-col gap-2">
+                   <ImageIcon size={32} strokeWidth={1} />
+                 </div>
+              </div>
+
+              <div className="p-6 flex flex-col items-center">
+                <p className="text-slate-400 text-xs font-bold mb-2 uppercase tracking-widest">中文翻譯</p>
+                <p className="text-lg font-medium text-slate-700 text-center mb-8 leading-relaxed">
+                   {highlightTargetChinese(currentWord['例句中文'], currentWord['目標中文'])}
+                </p>
+
+                <p className="text-xl font-medium text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100 w-full text-center mb-8">
+                  {showAnswer ? currentWord['韓文例句'] : maskExample(currentWord['韓文例句'], currentWord['單字（韓文）'])}
+                </p>
+
+                {showAnswer ? (
+                   <div className="text-center animate-fade-in w-full flex flex-col items-center">
+                      <p className="text-xs font-bold text-red-400 mb-1 tracking-widest">正確解答</p>
+                      
+                      <div className="flex items-center justify-center gap-2 mb-1 w-full">
+                        <h2 className="text-4xl font-black text-slate-800">{currentWord['單字（韓文）']}</h2>
+                        {currentWord['漢字源（Hanja）'] && <span className="text-sm font-bold text-pink-400">[{currentWord['漢字源（Hanja）']}]</span>}
+                      </div>
+                      
+                      <p className="text-sm font-bold text-slate-500 mb-5">
+                        {currentWord['中文意義']} <span className="text-xs bg-slate-100 px-2 py-1 rounded ml-1">{currentWord['詞性']}</span>
+                      </p>
+
+                      {tags.length > 0 && (
+                        <div className="flex flex-wrap justify-center gap-2 mb-4 w-full">
+                          {tags.map((tag, i) => (
+                            <span key={i} className="text-xs font-bold px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg">{tag}</span>
+                          ))}
+                        </div>
+                      )}
+
+                      {currentWord['詳細解說'] && currentWord['詳細解說'] !== '-' && (
+                        <div className="w-full text-left mt-2">
+                          <button 
+                            onClick={() => setShowDetail(!showDetail)}
+                            className="flex items-center justify-between w-full p-4 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-sm active:bg-slate-50 transition-colors"
+                          >
+                            查看詳細解說
+                            {showDetail ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                          </button>
+                          {showDetail && (
+                            <div className="p-4 mt-2 bg-slate-50 rounded-2xl text-sm text-slate-600 leading-relaxed animate-fade-in border border-slate-100">
+                              {currentWord['詳細解說']}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                   </div>
+                ) : (
+                  <input 
+                    type="text" 
+                    placeholder="輸入韓文單字..."
+                    className="w-full text-center text-3xl font-black p-4 border-b-2 border-slate-200 focus:border-pink-500 outline-none bg-transparent transition-colors mb-2 text-slate-800 placeholder:text-slate-300"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="mt-auto flex flex-col gap-3 shrink-0">
+              {!showAnswer && (
+                <button 
+                  onClick={() => { 
+                    if (!currentWord.isRetry) {
+                      markChallengeSRS(currentWord.ID, false); 
+                    }
+                    setShowAnswer(true); 
+                  }}
+                  className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold rounded-2xl text-lg active:scale-95 transition-transform"
+                >
+                  看解答
+                </button>
+              )}
+              <button 
+                onClick={handleAnswerSubmit}
+                className={`w-full py-4 font-bold rounded-2xl text-xl flex items-center justify-center gap-2 active:scale-95 transition-all ${showAnswer ? 'bg-slate-800 text-white shadow-lg' : 'bg-pink-500 text-white shadow-lg shadow-pink-200'}`}
+              >
+                {showAnswer ? '繼續下一個' : '提交答案'} <ArrowRight size={24} />
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      if (challengeState === 'summary') {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[75vh] animate-fade-in text-center px-4 pt-6">
+            <div className="w-24 h-24 bg-green-100 text-green-500 rounded-full flex items-center justify-center mb-6">
+              <Check size={48} strokeWidth={3} />
+            </div>
+            <h2 className="text-3xl font-black text-slate-800 mb-4">{isExtraMode ? "黃金進度達成！" : "今日挑戰完成！"}</h2>
+            <p className="text-slate-500 mb-8 leading-relaxed font-medium">
+              {isExtraMode ? "太棒了！您獲得了一個黃金進度塊。" : "所有的失敗單字都已經複習完畢，繼續保持這個氣勢！"}
+            </p>
+            
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+              <button 
+                onClick={() => prepareDaily()}
+                className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-lg transition-transform active:scale-95"
+              >
+                返回
+              </button>
+              <button 
+                onClick={startExtraChallenge}
+                className="w-full py-4 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold rounded-2xl text-lg transition-transform active:scale-95 shadow-lg shadow-yellow-200 flex justify-center items-center gap-2"
+              >
+                <Flame size={20} fill="currentColor"/> 繼續挑戰 (+5詞)
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return null;
+    }
+
+    // 啟動 React 應用程式 (使用 React 18 寫法)
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
