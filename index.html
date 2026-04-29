@@ -15,6 +15,7 @@
             'fade-in': 'fadeIn 0.3s ease-out',
             'slide-up': 'slideUp 0.4s ease-out',
             'shake': 'shake 0.5s ease-in-out',
+            'spin-slow': 'spin 1.5s linear infinite',
           },
           keyframes: {
             fadeIn: {
@@ -49,6 +50,12 @@
   
   <!-- 引入 Babel 讓瀏覽器可以編譯 JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- 引入 Firebase Compat SDK (v10) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
 </head>
 <body>
   <div id="root"></div>
@@ -58,7 +65,33 @@
     const { useState, useEffect, useMemo, useRef } = React;
 
     // ==========================================
-    // 1. 內聯 SVG 圖標組件 (取代會報錯的 lucide-react CDN)
+    // 0. Firebase 初始化配置
+    // ==========================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyC3wmLa5LzK1gTdguArIbBjuIfMWmlrz5Q",
+      authDomain: "the12weekyear.firebaseapp.com",
+      databaseURL: "https://the12weekyear-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "the12weekyear",
+      storageBucket: "the12weekyear.firebasestorage.app",
+      messagingSenderId: "937446028538",
+      appId: "1:937446028538:web:1f3e9c107003b4d9c10543",
+      measurementId: "G-B8BF81QMN5"
+    };
+
+    // 確保 Firebase 只初始化一次
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    
+    // 取得 Firebase 服務實例
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // 啟用 Firebase Auth 的本地持久化 (Persistence)，讓使用者下次開啟免重新登入
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+    // ==========================================
+    // 1. 內聯 SVG 圖標組件
     // ==========================================
     const Icon = ({ children, size = 24, strokeWidth = 2, fill = "none", className = "" }) => (
       <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -77,6 +110,10 @@
     const ChevronDown = (props) => <Icon {...props}><polyline points="6 9 12 15 18 9"/></Icon>;
     const ChevronUp = (props) => <Icon {...props}><polyline points="18 15 12 9 6 15"/></Icon>;
     const ImageIcon = (props) => <Icon {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></Icon>;
+    const UserIcon = (props) => <Icon {...props}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>;
+    const LogInIcon = (props) => <Icon {...props}><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></Icon>;
+    const Cloud = (props) => <Icon {...props}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></Icon>;
+    const LogOutIcon = (props) => <Icon {...props}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></Icon>;
 
     // ==========================================
     // 2. 資料庫與常數設定
@@ -746,29 +783,104 @@
     // 4. 主要 App 元件
     // ==========================================
     function App() {
+      // 狀態管理
       const [activeTab, setActiveTab] = useState('learning'); 
       const [isLearningMenuOpen, setIsLearningMenuOpen] = useState(true); 
       const [globalLearnQueue, setGlobalLearnQueue] = useState([]); 
       
+      // Auth & Sync 狀態
+      const [currentUser, setCurrentUser] = useState(null);
+      const [authLoading, setAuthLoading] = useState(true);
+      const [syncLoading, setSyncLoading] = useState(false);
+      
+      // Modals
+      const [showAuthModal, setShowAuthModal] = useState(false);
+      const [showProfileModal, setShowProfileModal] = useState(false);
+      const [showSyncModal, setShowSyncModal] = useState(false);
+      const [cloudDataTemp, setCloudDataTemp] = useState(null);
+
+      // 核心資料狀態
+      const defaultUserData = {
+        learning: { streak: 0, lastGoalDate: '', todayCount: 0, todayDate: '' },
+        challenge: { streak: 0, lastGoalDate: '', todayCount: 0, todayDate: '', extraBlocks: 0 },
+        partProgress: {}, 
+        wordStats: {} 
+      };
+
       const [userData, setUserData] = useState(() => {
         try {
           const saved = localStorage.getItem('krAppUserProgressV3');
           if (saved) return JSON.parse(saved);
         } catch (e) { console.error(e); }
-        return {
-          learning: { streak: 0, lastGoalDate: '', todayCount: 0, todayDate: '' },
-          challenge: { streak: 0, lastGoalDate: '', todayCount: 0, todayDate: '', extraBlocks: 0 },
-          partProgress: {}, 
-          wordStats: {} 
-        };
+        return defaultUserData;
       });
 
-      const learnedWordsCount = Object.keys(userData.wordStats).length;
-      const challengeTarget = Math.max(1, Math.min(20, learnedWordsCount));
+      // ==========================================
+      // Firebase 身分驗證與資料同步邏輯
+      // ==========================================
+      useEffect(() => {
+        if (!auth) {
+          setAuthLoading(false);
+          return;
+        }
 
+        const unsubscribe = auth.onAuthStateChanged(async (user) => {
+          if (user) {
+            setCurrentUser(user);
+            setSyncLoading(true);
+            try {
+              const doc = await db.collection('users').doc(user.uid).get();
+              const cloudData = doc.exists ? doc.data() : null;
+              
+              // 取得最新的本地資料
+              const localSaved = localStorage.getItem('krAppUserProgressV3');
+              const localData = localSaved ? JSON.parse(localSaved) : defaultUserData;
+              
+              const localHasData = Object.keys(localData.wordStats).length > 0;
+              const cloudHasData = cloudData && Object.keys(cloudData.wordStats).length > 0;
+
+              if (localHasData && cloudHasData) {
+                 // 兩邊都有資料 -> 詢問使用者要保留哪一邊
+                 setCloudDataTemp(cloudData);
+                 setShowSyncModal(true);
+              } else if (cloudHasData && !localHasData) {
+                 // 只有雲端有資料 -> 自動下載至本地
+                 setUserData(cloudData);
+              } else if (localHasData && !cloudHasData) {
+                 // 只有本地有資料 -> 自動上傳至雲端
+                 await db.collection('users').doc(user.uid).set(localData);
+              }
+            } catch (error) {
+              console.error("同步失敗:", error);
+            }
+            setSyncLoading(false);
+          } else {
+            setCurrentUser(null);
+          }
+          setAuthLoading(false);
+        });
+        return () => unsubscribe();
+      }, []);
+
+      // 本機與雲端儲存 (Debounce 防抖處理，避免頻繁寫入)
+      const timeoutRef = useRef(null);
       useEffect(() => {
         localStorage.setItem('krAppUserProgressV3', JSON.stringify(userData));
-      }, [userData]);
+
+        if (currentUser && db && !syncLoading && !showSyncModal) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = setTimeout(() => {
+            db.collection('users').doc(currentUser.uid).set(userData)
+              .catch(err => console.error("Firestore 寫入失敗:", err));
+          }, 2000); // 延遲 2 秒上傳，確保效能
+        }
+      }, [userData, currentUser, syncLoading, showSyncModal]);
+
+      // ==========================================
+      // 進度計算與更新函數
+      // ==========================================
+      const learnedWordsCount = Object.keys(userData.wordStats).length;
+      const challengeTarget = Math.max(1, Math.min(20, learnedWordsCount));
 
       const markLearningComplete = (wordId) => {
         setUserData(prev => {
@@ -864,8 +976,22 @@
       const isReached = currentStats.todayCount >= currentTarget && currentTarget > 0;
       const progressPercent = Math.min((currentStats.todayCount / currentTarget) * 100, 100) || 0;
 
+      // ==========================================
+      // 讀取中畫面
+      // ==========================================
+      if (authLoading || syncLoading) {
+        return (
+          <div className="min-h-screen bg-pink-50 flex flex-col items-center justify-center">
+            <RefreshCw className="text-pink-500 animate-spin-slow mb-4" size={40} />
+            <p className="text-slate-500 font-bold tracking-widest">系統載入中...</p>
+          </div>
+        );
+      }
+
       return (
-        <div className="min-h-screen bg-pink-50 text-slate-800 font-sans pb-28 selection:bg-pink-200 flex flex-col">
+        <div className="min-h-screen bg-pink-50 text-slate-800 font-sans pb-28 selection:bg-pink-200 flex flex-col relative">
+          
+          {/* Header 區塊 */}
           <header className="bg-white px-4 py-3 shadow-sm sticky top-0 z-10 flex items-center justify-between border-b border-pink-100">
             <div className="flex items-center gap-2">
               <div className={`p-2 rounded-full flex items-center justify-center transition-colors ${isReached ? 'bg-orange-100 text-orange-500 animate-pulse' : 'bg-slate-100 text-slate-400'}`}>
@@ -893,6 +1019,20 @@
                  </svg>
                  <span className="absolute text-[10px] font-bold text-slate-600">{currentStats.todayCount}</span>
                </div>
+
+               {/* 身分驗證按鈕 */}
+               {auth && (
+                 <button 
+                   onClick={() => currentUser ? setShowProfileModal(true) : setShowAuthModal(true)}
+                   className={`px-3 py-1.5 rounded-full flex items-center justify-center gap-2 transition-colors active:scale-95 ${currentUser ? 'bg-indigo-100 text-indigo-600' : 'bg-pink-100 text-pink-600 hover:bg-pink-200'}`}
+                 >
+                   {currentUser ? (
+                     <><UserIcon size={16} /><span className="text-xs font-bold">已同步</span></>
+                   ) : (
+                     <><LogInIcon size={16} /><span className="text-xs font-bold">登入同步</span></>
+                   )}
+                 </button>
+               )}
             </div>
           </header>
 
@@ -921,7 +1061,8 @@
             </div>
           </main>
 
-          <nav className="fixed bottom-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-100 flex justify-around max-w-md left-1/2 -translate-x-1/2 z-50 pb-safe pt-2 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
+          {/* 底部導航 */}
+          <nav className="fixed bottom-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-100 flex justify-around max-w-md left-1/2 -translate-x-1/2 z-40 pb-safe pt-2 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
             <button 
               onClick={() => { setActiveTab('learning'); setIsLearningMenuOpen(true); }}
               className={`flex-1 flex flex-col items-center py-2 transition-colors ${(activeTab === 'learning' && isLearningMenuOpen) ? 'text-pink-600' : 'text-slate-400 hover:text-pink-400'}`}
@@ -946,6 +1087,141 @@
               <span className="text-[11px] mt-1 font-bold">每日挑戰</span>
             </button>
           </nav>
+
+          {/* 彈出視窗區域 */}
+          {showAuthModal && <AuthModal auth={auth} onClose={() => setShowAuthModal(false)} />}
+          {showProfileModal && <ProfileModal auth={auth} currentUser={currentUser} onClose={() => setShowProfileModal(false)} />}
+          {showSyncModal && <SyncModal 
+                              onKeepLocal={() => {
+                                db.collection('users').doc(currentUser.uid).set(userData);
+                                setShowSyncModal(false);
+                              }} 
+                              onKeepCloud={() => {
+                                setUserData(cloudDataTemp);
+                                setShowSyncModal(false);
+                              }} 
+                            />}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 獨立組件: 登入/註冊 Modal
+    // ==========================================
+    function AuthModal({ auth, onClose }) {
+      const [isLogin, setIsLogin] = useState(true);
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        try {
+          if (isLogin) {
+            await auth.signInWithEmailAndPassword(email, password);
+          } else {
+            await auth.createUserWithEmailAndPassword(email, password);
+          }
+          onClose();
+        } catch (err) {
+          // 簡易翻譯常見錯誤
+          let msg = err.message;
+          if (err.code === 'auth/email-already-in-use') msg = '此信箱已經註冊過囉！';
+          if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') msg = '帳號或密碼錯誤。';
+          if (err.code === 'auth/weak-password') msg = '密碼太弱了，請至少輸入 6 個字元。';
+          setError(msg);
+        }
+        setLoading(false);
+      };
+
+      return (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl relative animate-slide-up">
+            <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+              <Icon size={24}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Icon>
+            </button>
+            <h2 className="text-2xl font-black text-slate-800 mb-6 text-center">{isLogin ? '登入帳號' : '註冊新帳號'}</h2>
+            
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block tracking-widest">電子信箱</label>
+                <input type="email" required className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-pink-500 outline-none transition-colors" value={email} onChange={e=>setEmail(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block tracking-widest">密碼</label>
+                <input type="password" required minLength="6" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-pink-500 outline-none transition-colors" value={password} onChange={e=>setPassword(e.target.value)} />
+              </div>
+              
+              {error && <p className="text-red-500 text-sm font-bold bg-red-50 p-3 rounded-xl">{error}</p>}
+              
+              <button disabled={loading} className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl text-lg mt-2 active:scale-95 transition-all disabled:opacity-50">
+                {loading ? '處理中...' : (isLogin ? '登入' : '註冊')}
+              </button>
+            </form>
+
+            <button onClick={() => setIsLogin(!isLogin)} className="w-full text-center mt-6 text-slate-500 font-bold hover:text-indigo-600 transition-colors">
+              {isLogin ? '沒有帳號嗎？點此註冊' : '已經有帳號了？點此登入'}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 獨立組件: 個人檔案/登出 Modal
+    // ==========================================
+    function ProfileModal({ auth, currentUser, onClose }) {
+      return (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-xl relative animate-slide-up flex flex-col items-center">
+            <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+              <Icon size={24}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Icon>
+            </button>
+            
+            <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-4">
+              <UserIcon size={40} />
+            </div>
+            <h2 className="text-xl font-black text-slate-800 mb-1">雲端同步已啟用</h2>
+            <p className="text-slate-500 mb-8 font-medium">{currentUser.email}</p>
+            
+            <button 
+              onClick={() => { auth.signOut(); onClose(); }}
+              className="w-full py-4 bg-slate-100 hover:bg-red-50 text-red-500 font-bold rounded-xl text-lg flex items-center justify-center gap-2 transition-colors active:scale-95"
+            >
+              <LogOutIcon size={20} /> 登出帳號
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 獨立組件: 同步衝突 Modal
+    // ==========================================
+    function SyncModal({ onKeepLocal, onKeepCloud }) {
+      return (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl relative animate-slide-up text-center">
+            <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Cloud size={32} />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800 mb-2">發現進度衝突</h2>
+            <p className="text-slate-500 mb-8 leading-relaxed font-medium">
+              系統偵測到您的「本機」與「雲端」都有不同的學習紀錄。請問您要保留哪一邊的資料？
+            </p>
+            
+            <div className="flex flex-col gap-3">
+              <button onClick={onKeepLocal} className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl text-lg active:scale-95 transition-all shadow-lg shadow-indigo-200">
+                上傳本機紀錄 (覆蓋雲端)
+              </button>
+              <button onClick={onKeepCloud} className="w-full py-4 bg-slate-100 text-slate-600 font-bold rounded-xl text-lg active:scale-95 transition-all hover:bg-slate-200">
+                下載雲端紀錄 (覆蓋本機)
+              </button>
+            </div>
+          </div>
         </div>
       );
     }
